@@ -1,0 +1,272 @@
+---------------------------------------------------------------
+-- PART-1 MINTING NON FUNGIBLE TOKEN
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate Blockchain Network
+---------------------------------------------------------------
+network="testnet-magic 1"
+or
+network="testnet-magic 2"
+or
+network="mainnet"
+
+---------------------------------------------------------------
+Test Querying The Blockchain 
+---------------------------------------------------------------
+cardano-cli query tip \
+--$network
+
+---------------------------------------------------------------
+Make Directory
+---------------------------------------------------------------
+mkdir -p myNFT/policy
+
+---------------------------------------------------------------
+Create Verification Signing Key
+---------------------------------------------------------------
+cardano-cli address key-gen \
+--verification-key-file myNFT/tokenAddress.vkey \
+--signing-key-file myNFT/tokenAddress.skey
+
+---------------------------------------------------------------
+Create Address
+---------------------------------------------------------------
+cardano-cli address build \
+--payment-verification-key-file myNFT/tokenAddress.vkey \
+--out-file myNFT/tokenAddress.addr \
+--$network
+
+tokenAddress=$(cat myNFT/tokenAddress.addr)
+echo $tokenAddress
+
+Result :
+addr_test1vqd0pqdn3fxe9arvyu4ehmj24uskacftqd3x9r7e5g8n9rqwphg5l
+
+---------------------------------------------------------------
+Transfer tADA From walletAddress to txAddress
+---------------------------------------------------------------
+- Open Yoroi Nightly of Eternl Wallet (walletAddress) which is avalilable tADA.
+- Copy the txAddress that was generated in the transfer section.
+- Send some amount of tADA
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+739b22525f6adc2d8a12252ca5dfa3817260ec4c5eb7a013d929c7276a3dd78e     0        100000000 lovelace + TxOutDatumNone
+
+txHash1="739b22525f6adc2d8a12252ca5dfa3817260ec4c5eb7a013d929c7276a3dd78e"
+txIx1="0"
+
+---------------------------------------------------------------
+Load Image to IPFS
+---------------------------------------------------------------
+Prepare the image
+
+Go to :
+https://app.pinata.cloud/signin
+End then load the image
+
+Get CID :
+QmWAUBB1oaym2VQSX76ayeUYbZrUbAgpNXhUs48nB3mRFX
+
+Check to :
+https://ipfs.io/ipfs/QmWAUBB1oaym2VQSX76ayeUYbZrUbAgpNXhUs48nB3mRFX
+
+Please wait the process
+
+---------------------------------------------------------------
+Initiate References Variable
+---------------------------------------------------------------
+imageName="cutezCatz#000"
+NFTname=$(echo -n $imageName | xxd -b -ps -c 80 | tr -d '\n')
+NFTamount="1"
+outputADA="1400000"
+ipfs="ipfs://QmWAUBB1oaym2VQSX76ayeUYbZrUbAgpNXhUs48nB3mRFX"
+slotNumber=$(expr $(cardano-cli query tip --$network | jq .slot?) + 10800)
+mediaType="image/png"
+description="This is a trial NFT and used for educational purpose."
+version="1.0"
+
+---------------------------------------------------------------
+Generate The Policy Script
+---------------------------------------------------------------
+cardano-cli address key-gen \
+    --verification-key-file myNFT/policy/policy.vkey \
+    --signing-key-file myNFT/policy/policy.skey
+
+touch myNFT/policy/policy.script && echo "" > myNFT/policy/policy.script
+
+echo "{" >> myNFT/policy/policy.script
+echo "  \"type\": \"all\"," >> myNFT/policy/policy.script 
+echo "  \"scripts\":" >> myNFT/policy/policy.script 
+echo "  [" >> myNFT/policy/policy.script 
+echo "   {" >> myNFT/policy/policy.script 
+echo "     \"type\": \"before\"," >> myNFT/policy/policy.script 
+echo "     \"slot\": $slotNumber" >> myNFT/policy/policy.script
+echo "   }," >> myNFT/policy/policy.script 
+echo "   {" >> myNFT/policy/policy.script
+echo "     \"type\": \"sig\"," >> myNFT/policy/policy.script 
+echo "     \"keyHash\": \"$(cardano-cli address key-hash --payment-verification-key-file myNFT/policy/policy.vkey)\"" >> myNFT/policy/policy.script 
+echo "   }" >> myNFT/policy/policy.script
+echo "  ]" >> myNFT/policy/policy.script 
+echo "}" >> myNFT/policy/policy.script
+
+---------------------------------------------------------------
+Generate PolicyID
+---------------------------------------------------------------
+cardano-cli transaction policyid \
+--script-file ./myNFT/policy/policy.script > myNFT/policy/policyID
+
+policyID=$(cat myNFT/policy/policyID)
+
+---------------------------------------------------------------
+Create metadata.json
+---------------------------------------------------------------
+echo "{" >> myNFT/metadata.json
+echo "  \"721\": {" >> myNFT/metadata.json
+echo "    \"$(cat myNFT/policy/policyID)\": {" >> myNFT/metadata.json
+echo "      \"$(echo $imageName)\": {" >> myNFT/metadata.json
+echo "        \"name\": \"$(echo $imageName)\"," >> myNFT/metadata.json
+echo "        \"image\": \"$(echo $ipfs)\"," >> myNFT/metadata.json
+echo "        \"mediaType\": \"$(echo $mediaType)\"," >> myNFT/metadata.json
+echo "        \"description\": \"$(echo $description)\"," >> myNFT/metadata.json
+echo "        \"files\": [{" >> myNFT/metadata.json
+echo "          \"name\": \"$(echo $imageName)\"," >> myNFT/metadata.json
+echo "          \"mediaType\": \"$(echo $mediaType)\"," >> myNFT/metadata.json
+echo "          \"src\": \"$(echo $ipfs)\"" >> myNFT/metadata.json
+echo "        }]" >> myNFT/metadata.json
+echo "      }" >> myNFT/metadata.json
+echo "    }," >> myNFT/metadata.json
+echo "    \"version\": \"$(echo $version)\"" >> myNFT/metadata.json
+echo "  }" >> myNFT/metadata.json
+echo "}" >> myNFT/metadata.json
+
+---------------------------------------------------------------
+Build Transaction (auto calculate)
+---------------------------------------------------------------
+cardano-cli transaction build \
+--tx-in $txHash1#$txIx1 \
+--tx-out $tokenAddress+$outputADA+"$NFTamount $policyID.$NFTname" \
+--change-address $tokenAddress \
+--mint="$NFTamount $policyID.$NFTname" \
+--minting-script-file myNFT/policy/policy.script \
+--metadata-json-file myNFT/metadata.json  \
+--invalid-hereafter $slotNumber \
+--witness-override 2 \
+--babbage-era \
+--out-file myNFT/txNFT.raw \
+--$network
+
+Result Of The Estimated Transaction Fee : 
+194321 Lovelace
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--signing-key-file myNFT/tokenAddress.skey \
+--signing-key-file myNFT/policy/policy.skey \
+--$network \
+--tx-body-file myNFT/txNFT.raw \
+--out-file myNFT/txNFT.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myNFT/txNFT.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+bbd527ed1950ea3804920dd2d924d6dc39e6dd2a4d4c840d059106df3977fa0c     0        98405679 lovelace + TxOutDatumNone
+bbd527ed1950ea3804920dd2d924d6dc39e6dd2a4d4c840d059106df3977fa0c     1        1400000 lovelace + 1 4bff6261ba3b7c569b2e122ec7036a5a3e8a415856a9733a5de10a25.637574657a4361747a23303030 + TxOutDatumNone
+
+---------------------------------------------------------------
+Displaying Your NFT
+---------------------------------------------------------------
+https://preprod.cardanoscan.io/
+
+Search By Policy ID :
+echo $policyID
+
+---------------------------------------------------------------
+-- PART-2 SEND NFT TO OTHER WALLET ADDRESS
+---------------------------------------------------------------
+---------------------------------------------------------------
+Set Reference Variables
+---------------------------------------------------------------
+txHash2="bbd527ed1950ea3804920dd2d924d6dc39e6dd2a4d4c840d059106df3977fa0c"
+txIx2="1"
+receiverAddress="addr_test1qrpkx20kxu0uz4cxpnuekg503mtxt0cs4y6ax2fke98r0jt37s0zwu94mwydenuj4vgwu0xvyua02mmev532k6xh06eqmuhggv"
+receiverADA="1400000"
+
+---------------------------------------------------------------
+Build Transaction (auto Calculate)
+---------------------------------------------------------------
+cardano-cli transaction build \
+--tx-in $txHash2#$txIx2 \
+--tx-in $txHash2#$txIx1 \
+--tx-out $receiverAddress+$receiverADA+"$NFTamount $policyID.$NFTname" \
+--change-address $tokenAddress \
+--witness-override 2 \
+--babbage-era \
+--out-file myNFT/txSendNFT.raw \
+--$network
+
+Result Of The Estimated Transaction Fee : 
+175093 Lovelace
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign  \
+--signing-key-file myNFT/tokenAddress.skey  \
+--signing-key-file myNFT/policy/policy.skey  \
+--$network \
+--tx-body-file myNFT/txSendNFT.raw  \
+--out-file myNFT/txSendNFT.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myNFT/txSendNFT.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+e7a2db6549ea25a10d8ff3f6b072feeedd69645398abaa4faaace8f2415ca40a     0        98230586 lovelace + TxOutDatumNone
+
+Note :
+Check the Receiver Address or Wallet
+
+---------------------------------------------------------------
+References
+---------------------------------------------------------------
+https://developers.cardano.org/docs/native-tokens/minting-nfts/
+https://cips.cardano.org/cips/cip25/
+https://docs.nmkr.io/nmkr-studio/token/metadata/metadata-standard-for-fungible-tokens

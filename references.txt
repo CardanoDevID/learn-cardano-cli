@@ -1,0 +1,3 @@
+https://github.com/input-output-hk/cardano-node/blob/master/doc/reference/cardano-node-cli-reference.md
+
+https://docs.cardano.org/development-guidelines/use-cli

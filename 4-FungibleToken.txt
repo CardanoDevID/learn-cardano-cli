@@ -1,0 +1,383 @@
+---------------------------------------------------------------
+-- PART-1 Minting Fungible Token
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate Blockchain Network
+---------------------------------------------------------------
+network="testnet-magic 1"
+or
+network="testnet-magic 2"
+or
+network="mainnet"
+
+---------------------------------------------------------------
+Test Querying The Blockchain 
+---------------------------------------------------------------
+cardano-cli query tip \
+--$network
+
+---------------------------------------------------------------
+Make Directory
+---------------------------------------------------------------
+mkdir -p myFT/policy
+
+---------------------------------------------------------------
+Create Verification Signing Key
+---------------------------------------------------------------
+cardano-cli address key-gen \
+--verification-key-file myFT/tokenAddress.vkey \
+--signing-key-file myFT/tokenAddress.skey
+
+---------------------------------------------------------------
+Create Address
+---------------------------------------------------------------
+cardano-cli address build \
+--payment-verification-key-file myFT/tokenAddress.vkey \
+--out-file myFT/tokenAddress.addr \
+--$network
+
+tokenAddress=$(cat myFT/tokenAddress.addr)
+echo $tokenAddress
+
+Result :
+addr_test1vpwpc8n5qxrzc2rrskaapzeqf8pj9evlx6dj6maf7m398fcxh86yy
+
+---------------------------------------------------------------
+Transfer tADA From walletAddress to txAddress
+---------------------------------------------------------------
+- Open Yoroi Nightly of Eternl Wallet (walletAddress) which is avalilable tADA.
+- Copy the txAddress that was generated in the transfer section.
+- Send some amount of tADA
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+356c62f0a4d62e85e9ebd647464cf665bae177e672c6fd3271cb4d1a005d7d5f     0        100000000 lovelace + TxOutDatumNone
+
+txHash1="356c62f0a4d62e85e9ebd647464cf665bae177e672c6fd3271cb4d1a005d7d5f"
+txIx1="0"
+balance1="100000000"
+
+---------------------------------------------------------------
+Generate The Policy Script
+---------------------------------------------------------------
+cardano-cli address key-gen \
+--verification-key-file myFT/policy/policy.vkey \
+--signing-key-file myFT/policy/policy.skey
+
+touch myFT/policy/policy.script && echo "" > myFT/policy/policy.script
+
+echo "{" >> myFT/policy/policy.script 
+echo "  \"keyHash\": \"$(cardano-cli address key-hash --payment-verification-key-file myFT/policy/policy.vkey)\"," >> myFT/policy/policy.script 
+echo "  \"type\": \"sig\"" >> myFT/policy/policy.script 
+echo "}" >> myFT/policy/policy.script
+
+---------------------------------------------------------------
+Generate PolicyID
+---------------------------------------------------------------
+cardano-cli transaction policyid \
+--script-file myFT/policy/policy.script > myFT/policy/policyID
+
+---------------------------------------------------------------
+Load Token Image to IPFS
+---------------------------------------------------------------
+Prepare the image
+
+Go to :
+https://app.pinata.cloud/signin
+End then load the image
+
+Get CID :
+QmRiAgCf9J3NaF5u2BG4jqZF981m5hTdA6jq4swHdgoVcA
+
+Check to :
+https://ipfs.io/ipfs/QmRiAgCf9J3NaF5u2BG4jqZF981m5hTdA6jq4swHdgoVcA
+
+Please wait the process
+
+---------------------------------------------------------------
+Initiate References Variable
+---------------------------------------------------------------
+policyID=$(cat myFT/policy/policyID)
+ticker="HXH"
+name="hunterXhunter"
+hexTicker=$(echo -n $ticker | xxd -ps | tr -d '\n')
+desc="This token is dummy project on testnet which is designed for educational purpose."
+description="This token is dummy project on testnet which is designed for educational purpose."
+icon="ipfs://QmRiAgCf9J3NaF5u2BG4jqZF981m5hTdA6jq4swHdgoVcA"
+image="ipfs://QmRiAgCf9J3NaF5u2BG4jqZF981m5hTdA6jq4swHdgoVcA"
+src="ipfs://QmRiAgCf9J3NaF5u2BG4jqZF981m5hTdA6jq4swHdgoVcA"
+mediaType="image/png"
+decimals="6"
+website="https://www.linkedin.com/in/valdryan-ivandito-9a25b41b7/"
+whitePaper="https://www.linkedin.com/in/valdryan-ivandito-9a25b41b7/"
+tokenSite="https://www.linkedin.com/in/valdryan-ivandito-9a25b41b7/"
+version="1.0"
+totalSupply="21000000"
+ADAoutput1="0"
+fee1="300000"
+
+echo $policyID
+echo $hexTicker
+echo $src
+echo $website
+echo $whitePaper
+echo $tokenSite
+
+---------------------------------------------------------------
+Create metadata.json
+---------------------------------------------------------------
+Note: Create the metadata by following the references on the following website
+https://docs.nmkr.io/nmkr-studio/token/metadata/metadata-standard-for-fungible-tokens
+
+Note: Open new tab, use nano end then copy-paste and modify metadata
+nano myFT/metadata.json
+
+---------------------------------------------------------------
+Create protokol.json
+---------------------------------------------------------------
+cardano-cli query protocol-parameters \
+--$network \
+--out-file myFT/protocol.json
+
+---------------------------------------------------------------
+Calculate Fee (Manual Calculation)
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--fee $fee1 \
+--tx-in $txHash1#$txIx1 \
+--tx-out $tokenAddress+$ADAoutput1+"$totalSupply $policyID.$hexTicker" \
+--mint "$totalSupply $policyID.$hexTicker" \
+--minting-script-file myFT/policy/policy.script \
+--metadata-json-file myFT/metadata.json  \
+--out-file myFT/txMintingFT.draft
+
+fee1=$(cardano-cli transaction calculate-min-fee --tx-body-file myFT/txMintingFT.draft --tx-in-count 1 --tx-out-count 1 --witness-count 1 --$network --protocol-params-file myFT/protocol.json | cut -d " " -f1)
+echo $fee1
+
+Result: 228245 Lovelace
+
+finalBalance1=$(expr $balance1 - $fee1)
+echo $finalBalance1
+
+Result: 99771755 Lovelace
+
+---------------------------------------------------------------
+Create Build Transaction
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--fee $fee1 \
+--tx-in $txHash1#$txIx1 \
+--tx-out $tokenAddress+$finalBalance1+"$totalSupply $policyID.$hexTicker" \
+--mint "$totalSupply $policyID.$hexTicker" \
+--minting-script-file myFT/policy/policy.script \
+--metadata-json-file myFT/metadata.json  \
+--out-file myFT/txMintingFT.raw
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--signing-key-file myFT/tokenAddress.skey \
+--signing-key-file myFT/policy/policy.skey \
+--$network \
+--tx-body-file myFT/txMintingFT.raw \
+--out-file myFT/txMintingFT.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myFT/txMintingFT.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+c483417aa84dfd54e5a816894d63ac7eadbde6afe6ba93486936e4d461594cbf     0        99771755 lovelace + 21000000 e1aa7c0db298ccf126df8e4843e0ff3df791efa4e26d8a04a475181a.485848 + TxOutDatumNone
+
+---------------------------------------------------------------
+Displaying Your FT
+---------------------------------------------------------------
+https://preprod.cardanoscan.io/
+
+Search By Policy ID :
+echo $policyID
+
+---------------------------------------------------------------
+-- PART-2 Send Fungible Token To Another Wallet Address
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate Reference Variables
+---------------------------------------------------------------
+txHash2="c483417aa84dfd54e5a816894d63ac7eadbde6afe6ba93486936e4d461594cbf"
+txIx2="0"
+balance2="99771755"
+fee2="300000"
+ADAoutput2="1500000"
+receiverAddress="addr_test1qrpkx20kxu0uz4cxpnuekg503mtxt0cs4y6ax2fke98r0jt37s0zwu94mwydenuj4vgwu0xvyua02mmev532k6xh06eqmuhggv"
+sendAmount="5000000"
+tokenAmount=$(expr $totalSupply - $sendAmount)
+
+notes :
+- receiverAddress is the wallet which is the tokens will be sent to
+- ADAoutput2 is the minimum amount of ADA (1.5 ADA minimum) that must be sent when sending tokens
+
+---------------------------------------------------------------
+Calculate Fee (Manual Calculation)
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--fee $fee2 \
+--tx-in $txHash2#$txIx2 \
+--tx-out $receiverAddress+$ADAoutput2+"$sendAmount $policyID.$hexTicker" \
+--tx-out $tokenAddress+$balance2+"$tokenAmount $policyID.$hexTicker" \
+--out-file myFT/txSendFT.draft
+
+fee2=$(cardano-cli transaction calculate-min-fee --tx-body-file myFT/txSendFT.draft --tx-in-count 1 --tx-out-count 2 --witness-count 1 --$network --protocol-params-file myFT/protocol.json | cut -d " " -f1)
+echo $fee2
+
+Result: 179449 Lovelace
+
+finalBalance2=$(expr $balance2 - $fee2 - $ADAoutput2)
+echo $finalBalance2
+
+Result: 98092306 Lovelace
+
+---------------------------------------------------------------
+Create Build Transaction
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--fee $fee2 \
+--tx-in $txHash2#$txIx2 \
+--tx-out $receiverAddress+$ADAoutput2+"$sendAmount $policyID.$hexTicker" \
+--tx-out $tokenAddress+$finalBalance2+"$tokenAmount $policyID.$hexTicker" \
+--out-file myFT/txSendFT.raw
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--signing-key-file myFT/tokenAddress.skey \
+--signing-key-file myFT/policy/policy.skey \
+--$network \
+--tx-body-file myFT/txSendFT.raw \
+--out-file myFT/txSendFT.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myFT/txSendFT.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+5301845efeed41b4771f6907896fffa71b81ad2f5d8cf1528dc34fe2c1908c45     1        98092306 lovelace + 16000000 e1aa7c0db298ccf126df8e4843e0ff3df791efa4e26d8a04a475181a.485848 + TxOutDatumNone
+
+---------------------------------------------------------------
+-- PART-3 Burning Fungible Token
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate Reference Variables
+---------------------------------------------------------------
+txHash3="5301845efeed41b4771f6907896fffa71b81ad2f5d8cf1528dc34fe2c1908c45"
+txIx3="1"
+balance3="98092306"
+fee3="300000"
+ADAoutput3="0"
+burnSupply="-11000000"
+tokenAmount=$(expr $tokenAmount + $burnSupply)
+
+---------------------------------------------------------------
+Calculate Fee (Manual Calculation)
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--fee $fee3 \
+--tx-in $txHash3#$txIx3 \
+--tx-out $tokenAddress+$ADAoutput3+"$tokenAmount $policyID.$hexTicker" \
+--mint "$burnSupply $policyID.$hexTicker" \
+--minting-script-file myFT/policy/policy.script \
+--metadata-json-file myFT/metadata.json  \
+--out-file myFT/txBurningFT.draft
+
+fee3=$(cardano-cli transaction calculate-min-fee --tx-body-file myFT/txBurningFT.draft --tx-in-count 1 --tx-out-count 1 --witness-count 1 --$network --protocol-params-file myFT/protocol.json | cut -d " " -f1)
+echo $fee3
+
+Result: 228245 Lovelace
+
+finalBalance3=$(expr $balance3 - $fee3)
+echo $finalBalance1
+
+Result: 99771755 Lovelace
+
+---------------------------------------------------------------
+Create Build Transaction
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--fee $fee3 \
+--tx-in $txHash3#$txIx3 \
+--tx-out $tokenAddress+$finalBalance3+"$tokenAmount $policyID.$hexTicker" \
+--mint "$burnSupply $policyID.$hexTicker" \
+--minting-script-file myFT/policy/policy.script \
+--metadata-json-file myFT/metadata.json  \
+--out-file myFT/txBurningFT.raw
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--signing-key-file myFT/tokenAddress.skey \
+--signing-key-file myFT/policy/policy.skey \
+--$network \
+--tx-body-file myFT/txBurningFT.raw \
+--out-file myFT/txBurningFT.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myFT/txBurningFT.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $tokenAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+059f20e4dde0294cf98de3396216bb3c3ace097686bd1d0d981984b32ee2947f     0        97864061 lovelace + 5000000 e1aa7c0db298ccf126df8e4843e0ff3df791efa4e26d8a04a475181a.485848 + TxOutDatumNone
+
+Note :
+Check the Receiver Address or Wallet
+
+---------------------------------------------------------------
+References
+---------------------------------------------------------------
+https://developers.cardano.org/docs/native-tokens/minting/
+https://docs.nmkr.io/nmkr-studio/token/metadata/metadata-standard-for-fungible-tokens

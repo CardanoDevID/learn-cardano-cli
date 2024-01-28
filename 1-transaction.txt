@@ -1,0 +1,193 @@
+---------------------------------------------------------------
+-- PART-1 Send tADA From walletAddress to txAddress
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate Blockchain Network
+---------------------------------------------------------------
+network="testnet-magic 1"
+or
+network="testnet-magic 2"
+or
+network="mainnet"
+
+---------------------------------------------------------------
+Test Querying The Blockchain 
+---------------------------------------------------------------
+cardano-cli query tip \
+--$network
+
+---------------------------------------------------------------
+Make Directory
+---------------------------------------------------------------
+mkdir -p myTransaction/payment
+
+---------------------------------------------------------------
+Create Verification Signing Key
+---------------------------------------------------------------
+cardano-cli address key-gen \
+--verification-key-file myTransaction/txAddress.vkey \
+--signing-key-file myTransaction/txAddress.skey
+
+---------------------------------------------------------------
+Create Address
+---------------------------------------------------------------
+cardano-cli address build \
+--payment-verification-key-file myTransaction/txAddress.vkey \
+--out-file myTransaction/txAddress.addr \
+--$network
+
+txAddress=$(cat myTransaction/txAddress.addr)
+echo $txAddress
+
+Result :
+addr_test1vzws4fmc9rds6cvc7fcah8lsc3axquaqn2r0ulxrzxze0ccmx4x5l
+
+---------------------------------------------------------------
+Transfer tADA From walletAddress to txAddress
+---------------------------------------------------------------
+- Open Yoroi Nightly of Eternl Wallet (walletAddress) which is avalilable tADA.
+- Copy the txAddress that was generated in the transfer section.
+- Send some amount of tADA
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $txAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+62c0ce8d6e0b584e9e263e3ba076f53c23095ebd0a9198305819cfa5ecef8e81     0        1000000000 lovelace + TxOutDatumNone
+
+txHash="62c0ce8d6e0b584e9e263e3ba076f53c23095ebd0a9198305819cfa5ecef8e81"
+txIx="0"
+
+-------------------------------------------------------------------------
+-- PART-2 Send tADA From txAddress to walletAddress & paymentAddress
+-------------------------------------------------------------------------
+---------------------------------------------------------------
+Create Verification Signing Key paymentAddress
+---------------------------------------------------------------
+cardano-cli address key-gen \
+--verification-key-file myTransaction/payment/paymentAddress.vkey \
+--signing-key-file myTransaction/payment/paymentAddress.skey
+
+---------------------------------------------------------------
+Create Address Payment Address
+---------------------------------------------------------------
+cardano-cli address build \
+--payment-verification-key-file myTransaction/payment/paymentAddress.vkey \
+--out-file myTransaction/payment/paymentAddress.addr \
+--$network
+
+paymentAddress=$(cat myTransaction/payment/paymentAddress.addr)
+echo $paymentAddress
+
+Result :
+addr_test1vruc49xfrz37a2vzrfnyuspcexdqednc5ksxs6hjn97gt8sr2099z
+
+---------------------------------------------------------------
+Balance Check Payment Address
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $paymentAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+
+Note :
+Still empty
+
+---------------------------------------------------------------
+Initiate References Variable
+---------------------------------------------------------------
+paymentAddress=$(cat myTransaction/payment/paymentAddress.addr)
+sendAmountPayment="200000000"
+
+walletAddress="addr_test1qqxpa4nw6t5svahuxte2durvnu87meq3k9gl3zjfxqq0u3ukluym9643satn7dq2gtgsmd50rh2qpesdzep4rdkqgt8st4yjgg"
+sendAmountWallet="500000000"
+
+---------------------------------------------------------------
+Build Transaction
+---------------------------------------------------------------
+cardano-cli transaction build \
+--babbage-era \
+--$network \
+--tx-in $txHash#$txIx \
+--tx-out $walletAddress+$sendAmountWallet \
+--tx-out $paymentAddress+$sendAmountPayment \
+--change-address $txAddress \
+--out-file myTransaction/tx.draft
+
+Result :
+Estimated transaction fee: Lovelace 168669
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--tx-body-file myTransaction/tx.draft \
+--signing-key-file myTransaction/txAddress.skey \
+--$network \
+--out-file myTransaction/tx.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myTransaction/tx.signed \
+--$network
+
+---------------------------------------------------------------
+Check Final Balance
+---------------------------------------------------------------
+-----------------------------
+Check txAddress Balance
+-----------------------------
+cardano-cli query utxo \
+--address $txAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+7155f60a1a6ab77d3d9f51f339c7f0ff4a8f3d41a84cf69e726de35e9e1701a7     0        29831331 lovelace + TxOutDatumNone
+
+-----------------------------
+Check paymentAddress Balance
+-----------------------------
+cardano-cli query utxo \
+--address $paymentAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+7155f60a1a6ab77d3d9f51f339c7f0ff4a8f3d41a84cf69e726de35e9e1701a7     2        20000000 lovelace + TxOutDatumNone
+
+-----------------------------
+Check walletAddress Balance
+-----------------------------
+cardano-cli query utxo \
+--address $walletAddress \
+--$network
+
+Note :
+Please check the wallet
+
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+7155f60a1a6ab77d3d9f51f339c7f0ff4a8f3d41a84cf69e726de35e9e1701a7     1        50000000 lovelace + TxOutDatumNone
+
+Note :
+You can trace of transactions in the blockchain explorer by using txHash in the search section
+https://preprod.cardanoscan.io/
+
+---------------------------------------------------------------
+References
+---------------------------------------------------------------
+https://developers.cardano.org/docs/stake-pool-course/handbook/create-simple-transaction/

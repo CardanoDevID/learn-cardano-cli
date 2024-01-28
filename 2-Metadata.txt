@@ -1,0 +1,335 @@
+---------------------------------------------------------------
+-- PART-1 Send Metadata
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate Blockchain Network
+---------------------------------------------------------------
+network="testnet-magic 1"
+or
+network="testnet-magic 2"
+or
+network="mainnet"
+
+---------------------------------------------------------------
+Test Querying The Blockchain 
+---------------------------------------------------------------
+cardano-cli query tip \
+--$network
+
+---------------------------------------------------------------
+Make Directory
+---------------------------------------------------------------
+mkdir -p myMetadata/metadata01
+
+---------------------------------------------------------------
+Create verification signing Key
+---------------------------------------------------------------
+cardano-cli address key-gen \
+--verification-key-file myMetadata/txAddress.vkey \
+--signing-key-file myMetadata/txAddress.skey
+
+---------------------------------------------------------------
+Create Address
+---------------------------------------------------------------
+cardano-cli address build \
+--payment-verification-key-file myMetadata/txAddress.vkey \
+--out-file myMetadata/txAddress.addr \
+--$network
+
+txAddress=$(cat myMetadata/txAddress.addr)
+echo $txAddress
+
+Result :
+addr_test1vp7m3e99mdwc76q7agpsmkxg57k7yn34um074szvrc4xmtcdmhwtk
+
+---------------------------------------------------------------
+Transfer tADA From walletAddress to txAddress
+---------------------------------------------------------------
+- Open Yoroi Nightly of Eternl Wallet (walletAddress) which is avalilable tADA.
+- Copy the txAddress that was generated in the transfer section.
+- Send some amount of tADA
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $txAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+83615a347cafed3fb02d0a054ae24bd20e0cc0dc99917f221c1825e26d5ee7cf     0        100000000 lovelace + TxOutDatumNone
+
+txHash1="83615a347cafed3fb02d0a054ae24bd20e0cc0dc99917f221c1825e26d5ee7cf"
+txIx1="0"
+
+---------------------------------------------------------------
+Create protocol.json
+---------------------------------------------------------------
+cardano-cli query protocol-parameters \
+--out-file myMetadata/metadata01/protocol.json \
+--$network
+
+---------------------------------------------------------------
+Create metadata.json
+---------------------------------------------------------------
+Notes:
+- Please read CIP-10 documentation, it's about transaction metadata label registry
+https://developers.cardano.org/docs/transaction-metadata/how-to-create-a-metadata-transaction-cli/
+- Please read list of registry-json, it's about registered and standard metadata labels
+https://cips.cardano.org/cips/cip10/registry.json
+- use metadata label "674" for transaction message/comment metadata
+- use metadata label "721" for NFT Metadata Standard
+- For testing / experiment you may use free labels with notes not registered in registry.json or reserved label
+
+metadataLabel="20221210"
+createdDate="2022-12-10 15:45:00.000"
+createdBy="Valdryan Ivandito"
+country="Indonesia"
+island="Bali"
+city="Denpasar"
+latitude="-8.785502"
+longitude="115.199806"
+
+echo "{" >> myMetadata/metadata01/metadata.json
+echo "  \"$metadataLabel\": {" >> myMetadata/metadata01/metadata.json
+echo "    \"created_date\": \"$(echo $createdDate)\"," >> myMetadata/metadata01/metadata.json
+echo "    \"created_by\": \"$(echo $createdBy)\"," >> myMetadata/metadata01/metadata.json
+echo "    \"country\": \"$(echo $country)\"," >> myMetadata/metadata01/metadata.json
+echo "    \"island\": \"$(echo $island)\"," >> myMetadata/metadata01/metadata.json
+echo "    \"city\": \"$(echo $city)\"," >> myMetadata/metadata01/metadata.json
+echo "    \"latitude\": \"$(echo $latitude)\"," >> myMetadata/metadata01/metadata.json
+echo "    \"longitude\": \"$(echo $longitude)\"" >> myMetadata/metadata01/metadata.json
+echo "  }" >> myMetadata/metadata01/metadata.json
+echo "}" >> myMetadata/metadata01/metadata.json
+
+cat myMetadata/metadata01/metadata.json
+
+Result :
+{
+  "20221210": {
+    "created_date": "2022-12-10 15:45:00.000",
+    "created_by": "Valdryan Ivandito",
+    "country": "Indonesia",
+    "island": "Bali",
+    "city": "Denpasar",
+    "latitude": "-8.785502",
+    "longitude": "115.199806"
+  }
+}
+
+---------------------------------------------------------------
+Build Transaction
+---------------------------------------------------------------
+cardano-cli transaction build \
+--babbage-era \
+--$network \
+--tx-in $txHash1#$txIx1 \
+--change-address $txAddress \
+--metadata-json-file myMetadata/metadata01/metadata.json \
+--protocol-params-file myMetadata/metadata01/protocol.json \
+--out-file myMetadata/metadata01/tx-with-metadata.raw
+
+Result :
+Estimated transaction fee: Lovelace 172541
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--signing-key-file myMetadata/txAddress.skey \
+--$network \
+--tx-body-file myMetadata/metadata01/tx-with-metadata.raw \
+--out-file myMetadata/metadata01/tx-with-metadata.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myMetadata/metadata01/tx-with-metadata.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $txAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+fa80eb2e6c504dab1a2a889eeb09ad5a0a2af1fe394b90f1f2100a5a2793bc87     0        99827459 lovelace + TxOutDatumNone
+
+---------------------------------------------------------------
+Check Metadata In Blockchain Explorer
+---------------------------------------------------------------
+Go to :
+https://preprod.cardanoscan.io/
+
+Check using txHash2 :
+fa80eb2e6c504dab1a2a889eeb09ad5a0a2af1fe394b90f1f2100a5a2793bc87
+
+
+---------------------------------------------------------------
+-- PART-2 Send Metadata And Pull Metadata Using Blockfrost API
+---------------------------------------------------------------
+---------------------------------------------------------------
+Initiate References Variable
+---------------------------------------------------------------
+txHash2="fa80eb2e6c504dab1a2a889eeb09ad5a0a2af1fe394b90f1f2100a5a2793bc87"
+txIx2="0"
+balance="99827459"
+fee="0"
+
+---------------------------------------------------------------
+Make Directory
+---------------------------------------------------------------
+mkdir -p myMetadata/metadata02
+
+---------------------------------------------------------------
+Create protocol.json
+---------------------------------------------------------------
+cardano-cli query protocol-parameters \
+--out-file myMetadata/metadata02/protocol.json \
+--$network
+
+---------------------------------------------------------------
+Create metadata.json
+---------------------------------------------------------------
+metadataLabel="20221210"
+createdDate="2022-12-10 16:30:00.000"
+createdBy="Albin Ivandito"
+country="Indonesia"
+island="Bali"
+city="Denpasar"
+latitude="-8.785502"
+longitude="115.199806"
+
+echo "{" >> myMetadata/metadata02/metadata.json
+echo "  \"$metadataLabel\": {" >> myMetadata/metadata02/metadata.json
+echo "    \"created_date\": \"$(echo $createdDate)\"," >> myMetadata/metadata02/metadata.json
+echo "    \"created_by\": \"$(echo $createdBy)\"," >> myMetadata/metadata02/metadata.json
+echo "    \"country\": \"$(echo $country)\"," >> myMetadata/metadata02/metadata.json
+echo "    \"island\": \"$(echo $island)\"," >> myMetadata/metadata02/metadata.json
+echo "    \"city\": \"$(echo $city)\"," >> myMetadata/metadata02/metadata.json
+echo "    \"latitude\": \"$(echo $latitude)\"," >> myMetadata/metadata02/metadata.json
+echo "    \"longitude\": \"$(echo $longitude)\"" >> myMetadata/metadata02/metadata.json
+echo "  }" >> myMetadata/metadata02/metadata.json
+echo "}" >> myMetadata/metadata02/metadata.json
+
+cat myMetadata/metadata02/metadata.json
+
+Result :
+{
+  "20221210": {
+    "created_date": "2022-12-10 16:30:00.000",
+    "created_by": "Albin Ivandito",
+    "country": "Indonesia",
+    "island": "Bali",
+    "city": "Denpasar",
+    "latitude": "-8.785502",
+    "longitude": "115.199806"
+  }
+}
+
+---------------------------------------------------------------
+Calculate Fee
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--tx-in $txHash2#$txIx2 \
+--tx-out $txAddress+0 \
+--metadata-json-file myMetadata/metadata02/metadata.json \
+--fee $fee \
+--out-file myMetadata/metadata02/tx-with-metadata.draft
+
+cardano-cli transaction calculate-min-fee \
+--tx-body-file myMetadata/metadata02/tx-with-metadata.draft \
+--tx-in-count 1 \
+--tx-out-count 1 \
+--witness-count 1 \
+--byron-witness-count 0 \
+--$network \
+--protocol-params-file myMetadata/metadata02/protocol.json
+
+fee=$(cardano-cli transaction calculate-min-fee --tx-body-file myMetadata/metadata02/tx-with-metadata.draft --tx-in-count 1 --tx-out-count 1 --witness-count 1 --$network --protocol-params-file myMetadata/metadata02/protocol.json | cut -d " " -f1)
+echo $fee
+
+Result:
+178085 Lovelace
+
+finalBalance=$(expr $balance - $fee)
+echo $finalBalance
+
+Result:
+99649374 Lovelace
+
+---------------------------------------------------------------
+Build Raw Transaction
+---------------------------------------------------------------
+cardano-cli transaction build-raw \
+--tx-in $txHash2#$txIx2 \
+--tx-out $txAddress+$finalBalance \
+--metadata-json-file myMetadata/metadata02/metadata.json \
+--fee $fee \
+--out-file myMetadata/metadata02/tx-with-metadata.raw
+
+---------------------------------------------------------------
+Sign Transaction
+---------------------------------------------------------------
+cardano-cli transaction sign \
+--tx-body-file myMetadata/metadata02/tx-with-metadata.raw \
+--signing-key-file myMetadata/txAddress.skey \
+--$network \
+--out-file myMetadata/metadata02/tx-with-metadata.signed
+
+---------------------------------------------------------------
+Submit Transaction
+---------------------------------------------------------------
+cardano-cli transaction submit \
+--tx-file myMetadata/metadata02/tx-with-metadata.signed \
+--$network
+
+---------------------------------------------------------------
+Balance Check
+---------------------------------------------------------------
+cardano-cli query utxo \
+--address $txAddress \
+--$network
+
+Result :
+                           TxHash                                 TxIx        Amount
+--------------------------------------------------------------------------------------
+9cc5f0bdaea75d0cad2210edfff2029b5742d5b391cc3f5eac42cdd93534f663     0        99649374 lovelace + TxOutDatumNone
+
+---------------------------------------------------------------
+Query Metadata Using Blockfrost API
+---------------------------------------------------------------
+Go to:
+https://blockfrost.io/
+
+Add Project -> Project name: "2_MetadataTesting" -> Network: "Cardano preprod" -> Save project
+
+Copy projectID:
+projectID="preprodZ3lKeDLsoVXfJ9BuOqWl5Ytq4JyJi5eb"
+
+Copy API Example:
+
+Epochs Check:
+curl -H "project_id: $projectID" https://cardano-preprod.blockfrost.io/api/v0/epochs/latest | jq
+
+Blocks Check:
+curl -H "project_id: $projectID" https://cardano-preprod.blockfrost.io/api/v0/blocks/latest | jq
+
+Retrieve Metadata:
+curl -H "project_id: $projectID" https://cardano-preprod.blockfrost.io/api/v0/metadata/txs/labels/ | jq
+curl -H "project_id: $projectID" https://cardano-preprod.blockfrost.io/api/v0/metadata/txs/labels/$metadataLabel | jq
+curl -H "project_id: $projectID" "https://cardano-preprod.blockfrost.io/api/v0/metadata/txs/labels/$metadataLabel" | jq
+
+---------------------------------------------------------------
+References
+---------------------------------------------------------------
+https://developers.cardano.org/docs/transaction-metadata/how-to-create-a-metadata-transaction-cli/
+https://cips.cardano.org/cips/cip10/
+https://cips.cardano.org/cips/cip10/registry.json
